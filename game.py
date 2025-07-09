@@ -33,16 +33,36 @@ screen = pygame.display.set_mode((WIDTH, HEIGHT))
 pygame.display.set_caption("🚀 Space Invaders - Enhanced Edition")
 
 # Load assets
-player_img = pygame.image.load("player.png")
+player_img = pygame.image.load("assets/player.png")
 player_img = pygame.transform.scale(player_img, (50, 40))
-enemy_img = pygame.image.load("enemy.png")
+enemy_img = pygame.image.load("assets/enemy.png")
 enemy_img = pygame.transform.scale(enemy_img, (40, 40))
 
-# Fonts - Multiple font sizes for better hierarchy
-title_font = pygame.font.Font(None, 64)
-score_font = pygame.font.Font(None, 32)
-ui_font = pygame.font.Font(None, 24)
-small_font = pygame.font.Font(None, 20)
+# Fonts - Custom aesthetic fonts with fallbacks
+try:
+    # Try to load system fonts for better aesthetics
+    title_font = pygame.font.SysFont("orbitron", 72, bold=True)
+    if not title_font:
+        title_font = pygame.font.SysFont("arial", 72, bold=True)
+except:
+    title_font = pygame.font.Font(None, 72)
+
+try:
+    score_font = pygame.font.SysFont("consolas", 28, bold=True)
+    if not score_font:
+        score_font = pygame.font.SysFont("courier", 28, bold=True)
+except:
+    score_font = pygame.font.Font(None, 28)
+
+try:
+    ui_font = pygame.font.SysFont("arial", 22, bold=False)
+except:
+    ui_font = pygame.font.Font(None, 22)
+
+try:
+    small_font = pygame.font.SysFont("arial", 18, bold=False)
+except:
+    small_font = pygame.font.Font(None, 18)
 
 # Stars for background
 stars = []
@@ -110,13 +130,36 @@ def draw_particles():
     for particle in particles:
         particle.draw(screen)
 
-def draw_starfield():
-    for star in stars:
-        pygame.draw.circle(screen, WHITE, (star[0], star[1]), star[2])
-        star[1] += star[2] * 0.5
-        if star[1] > HEIGHT:
-            star[1] = 0
-            star[0] = random.randint(0, WIDTH)
+def draw_text_with_shadow(surface, text, font, color, shadow_color, x, y, shadow_offset=2):
+    """Draw text with a shadow effect for better readability and aesthetics"""
+    # Draw shadow
+    shadow_text = font.render(text, True, shadow_color)
+    surface.blit(shadow_text, (x + shadow_offset, y + shadow_offset))
+    
+    # Draw main text
+    main_text = font.render(text, True, color)
+    surface.blit(main_text, (x, y))
+    return main_text.get_rect(x=x, y=y)
+
+def draw_text_with_glow(surface, text, font, color, glow_color, center_pos, glow_radius=3):
+    """Draw text with a glowing effect"""
+    # Draw multiple glow layers
+    for i in range(glow_radius, 0, -1):
+        alpha = max(30, 150 - i * 30)
+        glow_surface = pygame.Surface(font.size(text), pygame.SRCALPHA)
+        glow_text = font.render(text, True, (*glow_color, alpha))
+        
+        for dx in range(-i, i+1):
+            for dy in range(-i, i+1):
+                if dx*dx + dy*dy <= i*i:
+                    text_rect = glow_text.get_rect(center=(center_pos[0] + dx, center_pos[1] + dy))
+                    surface.blit(glow_text, text_rect)
+    
+    # Draw main text
+    main_text = font.render(text, True, color)
+    main_rect = main_text.get_rect(center=center_pos)
+    surface.blit(main_text, main_rect)
+    return main_rect
 
 def draw_enemies():
     for enemy in enemies:
@@ -154,27 +197,40 @@ def check_collision(score):
     return score
 
 def draw_hud(score):
-    # Background panel for HUD
-    hud_rect = pygame.Rect(0, 0, WIDTH, 50)
-    pygame.draw.rect(screen, DARK_BLUE, hud_rect)
-    pygame.draw.line(screen, CYAN, (0, 50), (WIDTH, 50), 2)
+    # Background panel for HUD with gradient
+    hud_rect = pygame.Rect(0, 0, WIDTH, 60)
     
-    # Score display
-    score_text = score_font.render(f"SCORE: {score:06d}", True, GOLD)
-    screen.blit(score_text, (20, 15))
+    # Draw gradient background for HUD
+    for y in range(60):
+        alpha = int(200 * (1 - y / 60))
+        color = (DARK_BLUE[0], DARK_BLUE[1], DARK_BLUE[2], alpha)
+        pygame.draw.line(screen, DARK_BLUE, (0, y), (WIDTH, y))
     
-    # Health display
-    health_text = ui_font.render("SHIELDS:", True, CYAN)
-    screen.blit(health_text, (WIDTH - 200, 15))
+    # Glow line separator
+    pygame.draw.line(screen, CYAN, (0, 58), (WIDTH, 58), 3)
+    pygame.draw.line(screen, NEON_BLUE, (0, 60), (WIDTH, 60), 1)
     
-    # Health bars
+    # Score display with shadow
+    score_text = f"SCORE: {score:06d}"
+    draw_text_with_shadow(screen, score_text, score_font, GOLD, BLACK, 25, 18)
+    
+    # Health display with shadow
+    draw_text_with_shadow(screen, "SHIELDS:", ui_font, CYAN, BLACK, WIDTH - 200, 20)
+    
+    # Enhanced health bars with glow effect
     for i in range(max_health):
-        x = WIDTH - 120 + i * 30
+        x = WIDTH - 120 + i * 32
+        y = 22
+        
         if i < player_health:
-            pygame.draw.rect(screen, NEON_GREEN, (x, 18, 25, 15))
-            pygame.draw.rect(screen, CYAN, (x, 18, 25, 15), 2)
+            # Draw glow effect for active shields
+            pygame.draw.rect(screen, NEON_GREEN, (x-1, y-1, 27, 17), 0)
+            pygame.draw.rect(screen, (0, 150, 0), (x+1, y+1, 23, 13), 0)
+            pygame.draw.rect(screen, CYAN, (x, y, 25, 15), 2)
         else:
-            pygame.draw.rect(screen, RED, (x, 18, 25, 15), 2)
+            # Draw depleted shields
+            pygame.draw.rect(screen, (50, 0, 0), (x, y, 25, 15), 0)
+            pygame.draw.rect(screen, RED, (x, y, 25, 15), 2)
 
 def draw_menu():
     # Gradient background
@@ -187,48 +243,49 @@ def draw_menu():
     
     draw_starfield()
     
-    # Title with glow effect
-    title_text = title_font.render("SPACE INVADERS", True, CYAN)
-    title_rect = title_text.get_rect(center=(WIDTH//2, HEIGHT//3))
+    # Enhanced title with multiple glow effects
+    title_center = (WIDTH//2, HEIGHT//3)
+    draw_text_with_glow(screen, "SPACE INVADERS", title_font, CYAN, NEON_BLUE, title_center, 4)
     
-    # Draw glow
-    for offset in range(1, 4):
-        glow_text = title_font.render("SPACE INVADERS", True, DARK_BLUE)
-        screen.blit(glow_text, (title_rect.x - offset, title_rect.y - offset))
-        screen.blit(glow_text, (title_rect.x + offset, title_rect.y + offset))
+    # Animated start button (subtle pulsing effect)
+    pulse = abs(math.sin(pygame.time.get_ticks() * 0.003)) * 0.3 + 0.7
+    start_color = (int(NEON_GREEN[0] * pulse), int(NEON_GREEN[1] * pulse), int(NEON_GREEN[2] * pulse))
     
-    screen.blit(title_text, title_rect)
+    start_center = (WIDTH//2, HEIGHT//2)
+    draw_text_with_shadow(screen, "PRESS SPACE TO START", score_font, start_color, BLACK, 
+                         start_center[0] - score_font.size("PRESS SPACE TO START")[0]//2, 
+                         start_center[1] - score_font.size("PRESS SPACE TO START")[1]//2, 3)
     
-    # Menu options
-    start_text = score_font.render("PRESS SPACE TO START", True, NEON_GREEN)
-    start_rect = start_text.get_rect(center=(WIDTH//2, HEIGHT//2))
-    screen.blit(start_text, start_rect)
-    
-    controls_text = ui_font.render("CONTROLS: ← → ARROWS TO MOVE, SPACE TO SHOOT", True, WHITE)
-    controls_rect = controls_text.get_rect(center=(WIDTH//2, HEIGHT//2 + 50))
-    screen.blit(controls_text, controls_rect)
+    # Controls text with better styling
+    controls_center = (WIDTH//2, HEIGHT//2 + 60)
+    draw_text_with_shadow(screen, "CONTROLS: ← → ARROWS TO MOVE, SPACE TO SHOOT", ui_font, WHITE, DARK_BLUE,
+                         controls_center[0] - ui_font.size("CONTROLS: ← → ARROWS TO MOVE, SPACE TO SHOOT")[0]//2,
+                         controls_center[1] - ui_font.size("CONTROLS: ← → ARROWS TO MOVE, SPACE TO SHOOT")[1]//2, 1)
 
 def draw_game_over(score):
-    # Semi-transparent overlay
+    # Semi-transparent overlay with better opacity
     overlay = pygame.Surface((WIDTH, HEIGHT))
-    overlay.set_alpha(180)
+    overlay.set_alpha(200)
     overlay.fill(BLACK)
     screen.blit(overlay, (0, 0))
     
-    # Game Over text
-    game_over_text = title_font.render("GAME OVER", True, RED)
-    game_over_rect = game_over_text.get_rect(center=(WIDTH//2, HEIGHT//3))
-    screen.blit(game_over_text, game_over_rect)
+    # Enhanced Game Over text with dramatic glow
+    game_over_center = (WIDTH//2, HEIGHT//3)
+    draw_text_with_glow(screen, "GAME OVER", title_font, RED, NEON_PINK, game_over_center, 5)
     
-    # Final score
-    final_score_text = score_font.render(f"FINAL SCORE: {score:06d}", True, GOLD)
-    final_score_rect = final_score_text.get_rect(center=(WIDTH//2, HEIGHT//2))
-    screen.blit(final_score_text, final_score_rect)
+    # Final score with elegant styling
+    final_score_text = f"FINAL SCORE: {score:06d}"
+    final_score_center = (WIDTH//2, HEIGHT//2)
+    draw_text_with_shadow(screen, final_score_text, score_font, GOLD, BLACK,
+                         final_score_center[0] - score_font.size(final_score_text)[0]//2,
+                         final_score_center[1] - score_font.size(final_score_text)[1]//2, 3)
     
-    # Restart option
-    restart_text = ui_font.render("PRESS R TO RESTART OR ESC TO QUIT", True, CYAN)
-    restart_rect = restart_text.get_rect(center=(WIDTH//2, HEIGHT//2 + 50))
-    screen.blit(restart_text, restart_rect)
+    # Restart instructions with better spacing
+    restart_text = "PRESS R TO RESTART OR ESC TO QUIT"
+    restart_center = (WIDTH//2, HEIGHT//2 + 70)
+    draw_text_with_shadow(screen, restart_text, ui_font, CYAN, DARK_BLUE,
+                         restart_center[0] - ui_font.size(restart_text)[0]//2,
+                         restart_center[1] - ui_font.size(restart_text)[1]//2, 2)
 
 def reset_game():
     global player_x, player_y, player_dx, player_health, bullets, enemies, score, particles, game_state
@@ -247,6 +304,14 @@ def reset_game():
     
     score = 0
     game_state = PLAYING
+
+def draw_starfield():
+    for star in stars:
+        pygame.draw.circle(screen, WHITE, (star[0], star[1]), star[2])
+        star[1] += star[2] * 0.5
+        if star[1] > HEIGHT:
+            star[1] = 0
+            star[0] = random.randint(0, WIDTH)
 
 # Game loop
 clock = pygame.time.Clock()
